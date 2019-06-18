@@ -20,6 +20,10 @@ class GoogleMap extends StatefulWidget {
     @required this.initialCameraPosition,
     this.onMapCreated,
     this.gestureRecognizers,
+    this.child,
+    this.childKey,
+    this.overlay,
+    this.autoPadding = true,
     this.compassEnabled = true,
     this.cameraTargetBounds = CameraTargetBounds.unbounded,
     this.mapType = MapType.normal,
@@ -49,6 +53,18 @@ class GoogleMap extends StatefulWidget {
 
   /// The initial position of the map's camera.
   final CameraPosition initialCameraPosition;
+
+  ///The Widget to be shown on top of Map as the child element which automatically sets the bottom padding.
+  final Widget child;
+
+  ///The Key of the child used to find and get the render size of child. MUST BE A GlobalKey.
+  final GlobalKey childKey;
+
+  ///The Widget to be shown on top of Map as the overlay element which DOES NOT automatically set the bottom padding.
+  final Widget overlay;
+
+  /// True if bottom is to be set automatically by the widget and should override any bottom padding that is specified by user.
+  final bool autoPadding;
 
   /// True if the map should show a compass when rotated.
   final bool compassEnabled;
@@ -191,32 +207,53 @@ class _GoogleMapState extends State<GoogleMap> {
       'polylinesToAdd': _serializePolylineSet(widget.polylines),
       'circlesToAdd': _serializeCircleSet(widget.circles),
     };
-    if (defaultTargetPlatform == TargetPlatform.android) {
-      return AndroidView(
-        viewType: 'plugins.flutter.io/google_maps',
-        onPlatformViewCreated: onPlatformViewCreated,
-        gestureRecognizers: widget.gestureRecognizers,
-        creationParams: creationParams,
-        creationParamsCodec: const StandardMessageCodec(),
-      );
-    } else if (defaultTargetPlatform == TargetPlatform.iOS) {
-      return UiKitView(
-        viewType: 'plugins.flutter.io/google_maps',
-        onPlatformViewCreated: onPlatformViewCreated,
-        gestureRecognizers: widget.gestureRecognizers,
-        creationParams: creationParams,
-        creationParamsCodec: const StandardMessageCodec(),
-      );
+
+    Widget map() {
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        return AndroidView(
+          viewType: 'plugins.flutter.io/google_maps',
+          onPlatformViewCreated: onPlatformViewCreated,
+          gestureRecognizers: widget.gestureRecognizers,
+          creationParams: creationParams,
+          creationParamsCodec: const StandardMessageCodec(),
+        );
+      } else if (defaultTargetPlatform == TargetPlatform.iOS) {
+        return UiKitView(
+          viewType: 'plugins.flutter.io/google_maps',
+          onPlatformViewCreated: onPlatformViewCreated,
+          gestureRecognizers: widget.gestureRecognizers,
+          creationParams: creationParams,
+          creationParamsCodec: const StandardMessageCodec(),
+        );
+      }
+
+      return Text(
+          '$defaultTargetPlatform is not yet supported by the maps plugin');
     }
 
-    return Text(
-        '$defaultTargetPlatform is not yet supported by the maps plugin');
+    return Stack(
+      children: <Widget>[
+        map(),
+        Column(
+          children: <Widget>[
+            Expanded(
+                child: Container(
+              child: widget.overlay,
+            )),
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: widget.child,
+            )
+          ],
+        ),
+      ],
+    );
   }
 
   @override
   void initState() {
     super.initState();
-    _googleMapOptions = _GoogleMapOptions.fromWidget(widget);
+    _googleMapOptions = _GoogleMapOptions.fromWidget(widget, padding: getPadding());
     _markers = _keyByMarkerId(widget.markers);
     _polygons = _keyByPolygonId(widget.polygons);
     _polylines = _keyByPolylineId(widget.polylines);
@@ -233,8 +270,20 @@ class _GoogleMapState extends State<GoogleMap> {
     _updateCircles();
   }
 
+  EdgeInsets getPadding() {
+    if (widget.autoPadding == true && widget.child.key == widget.childKey) {
+      final RenderBox renderBox =
+          widget.childKey.currentContext.findRenderObject();
+      return EdgeInsets.fromLTRB(widget.padding.left, widget.padding.top,
+          widget.padding.right, renderBox.size.height ?? widget.padding.bottom);
+    } else {
+      return widget.padding;
+    }
+  }
+
   void _updateOptions() async {
-    final _GoogleMapOptions newOptions = _GoogleMapOptions.fromWidget(widget);
+    final _GoogleMapOptions newOptions =
+        _GoogleMapOptions.fromWidget(widget, padding: getPadding());
     final Map<String, dynamic> updates =
         _googleMapOptions.updatesMap(newOptions);
     if (updates.isEmpty) {
@@ -356,7 +405,7 @@ class _GoogleMapOptions {
     this.padding,
   });
 
-  static _GoogleMapOptions fromWidget(GoogleMap map) {
+  static _GoogleMapOptions fromWidget(GoogleMap map, {EdgeInsets padding}) {
     return _GoogleMapOptions(
       compassEnabled: map.compassEnabled,
       cameraTargetBounds: map.cameraTargetBounds,
@@ -369,7 +418,7 @@ class _GoogleMapOptions {
       zoomGesturesEnabled: map.zoomGesturesEnabled,
       myLocationEnabled: map.myLocationEnabled,
       myLocationButtonEnabled: map.myLocationButtonEnabled,
-      padding: map.padding,
+      padding: padding??map.padding,
     );
   }
 

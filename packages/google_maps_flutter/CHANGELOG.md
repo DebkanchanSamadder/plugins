@@ -1,3 +1,6 @@
+## 0.5.18
+* Add child and overlay with autoPadding.
+
 ## 0.5.17
 
 * Add support for Padding.
