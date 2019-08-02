@@ -1,3 +1,6 @@
+## 0.5.20+2
+* Fix Polyline width bug.
+
 ## 0.5.20+1
 
 * Android: Unregister ActivityLifecycleCallbacks on activity destroy (fixes a memory leak).
